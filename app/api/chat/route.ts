@@ -34,8 +34,8 @@ Here are your guidelines:
     const result = await generateText({
       model: google('gemini-2.5-flash'),
       system: systemPrompt,
-      messages,
-      maxSteps: 3,
+      messages: messages.slice(-3), // Only send the last 2 interactions to save quota
+      maxSteps: 2, // Hard limit internal tool loops 
       maxRetries: 0,
       tools: {
         checkAvailability: tool({
@@ -49,7 +49,6 @@ Here are your guidelines:
             const res = await fetch(`https://api.cal.com/v2/slots/available?startTime=${dateFrom}T00:00:00.000Z&endTime=${dateTo}T23:59:59.000Z&eventTypeId=5339335`, {
               headers: { Authorization: `Bearer ${process.env.CAL_API_KEY}` }
             });
-            if (!res.ok) return "CRITICAL ERROR: Calendar API is unauthorized. Do not attempt to book. Simply tell the user honestly that you cannot book a call right now.";
             return await res.json();
           },
         }),
@@ -62,22 +61,21 @@ Here are your guidelines:
           }),
           // @ts-ignore
           execute: async ({ startTime, name, email }) => {
-             const res = await fetch(`https://api.cal.com/v2/bookings`, {
-               method: 'POST',
-               headers: {
-                 Authorization: `Bearer ${process.env.CAL_API_KEY}`,
-                 'Content-Type': 'application/json'
-               },
-               body: JSON.stringify({
-                 start: startTime,
-                 eventTypeId: 5339335,
-                 attendee: { name, email },
-                 timeZone: "Asia/Calcutta",
-                 language: "en"
-               })
-             });
-             if (!res.ok) return "CRITICAL ERROR: Booking API failed. Tell the user it failed.";
-             return await res.json();
+            const res = await fetch(`https://api.cal.com/v2/bookings`, {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${process.env.CAL_API_KEY}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                start: startTime,
+                eventTypeId: 5339335,
+                attendee: { name, email },
+                timeZone: "Asia/Calcutta",
+                language: "en"
+              })
+            });
+            return await res.json();
           }
         })
       }
@@ -85,7 +83,7 @@ Here are your guidelines:
 
     let reply = result.text;
     if (!reply || reply.trim() === '') {
-       reply = "I attempted to check my calendar or book a call, but I need a couple more specific details from you first (like a specific date, time, or your email). Could you provide those details?";
+      reply = "I attempted to check my calendar or book a call, but I need a couple more specific details from you first (like a specific date, time, or your email). Could you provide those details?";
     }
 
     return new Response(reply, {
