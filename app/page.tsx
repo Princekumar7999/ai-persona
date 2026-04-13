@@ -1,7 +1,6 @@
 "use client";
 
 import { useChat } from '@ai-sdk/react';
-import type { Message } from 'ai';
 import { Send, User } from 'lucide-react';
 
 export default function Chat() {
@@ -29,7 +28,7 @@ export default function Chat() {
              <p className="text-sm">Ask me about my background, skills, GitHub projects, or schedule an interview!</p>
           </div>
         )}
-        {messages.map((m: Message) => (
+        {messages.map((m: any) => (
           <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} w-full group relative mb-4`}>
             <div className={`p-4 rounded-2xl max-w-[85%] text-sm ${m.role === 'user' ? 'bg-blue-600 text-white rounded-br-none shadow-sm' : 'bg-white border text-gray-800 rounded-bl-none shadow-sm shadow-slate-200'}`}>
                <span className="whitespace-pre-wrap leading-relaxed">{m.content}</span>
