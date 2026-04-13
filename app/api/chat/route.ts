@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { google } from '@ai-sdk/google';
-import { generateText, tool } from 'ai';
+import { streamText, tool } from 'ai';
 import { z } from 'zod';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -29,7 +29,7 @@ Here are your guidelines:
 `;
 
   try {
-    const result = await generateText({
+    const result = await streamText({
       model: google('gemini-2.5-flash'),
       system: systemPrompt,
       messages,
@@ -77,7 +77,8 @@ Here are your guidelines:
       }
     });
 
-    return new Response(JSON.stringify(result), { headers: { 'Content-Type': 'application/json' } });
+    // @ts-ignore
+    return result.toDataStreamResponse();
   } catch (error: any) {
     console.error("VERCEL API CRASH:", error);
     return new Response(JSON.stringify({ error: error.message || error.toString(), stack: error.stack }), { status: 500, headers: { 'Content-Type': 'application/json' } });
