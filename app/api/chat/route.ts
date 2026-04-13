@@ -79,7 +79,12 @@ Here are your guidelines:
       }
     });
 
-    return new Response(result.text, {
+    let reply = result.text;
+    if (!reply || reply.trim() === '') {
+       reply = "I attempted to check my calendar or book a call, but I need a couple more specific details from you first (like a specific date, time, or your email). Could you provide those details?";
+    }
+
+    return new Response(reply, {
       status: 200,
       headers: { 'Content-Type': 'text/plain; charset=utf-8' }
     });
