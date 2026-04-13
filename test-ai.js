@@ -1,14 +1,14 @@
 require('dotenv').config({ path: './.env.local' });
-const { generateText } = require('ai');
+const { streamText } = require('ai');
 const { google } = require('@ai-sdk/google');
 
 async function main() {
   try {
-    const response = await generateText({
-      model: google('gemini-1.5-flash-latest'),
+    const response = await streamText({
+      model: google('gemini-2.5-flash'),
       prompt: 'say hi'
     });
-    console.log("SUCCESS:", response.text);
+    console.log("Keys:", Object.keys(response));
   } catch (e) {
     console.error("FAILED:", e);
   }
