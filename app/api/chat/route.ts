@@ -10,7 +10,7 @@ export async function POST(req: Request) {
   const { messages } = await req.json();
 
   // Load resume/context dynamically
-  const resumePath = path.join(process.cwd(), '../knowledge.md');
+  const resumePath = path.join(process.cwd(), './knowledge.md');
   const resumeText = fs.existsSync(resumePath) ? fs.readFileSync(resumePath, 'utf8') : '';
 
   const systemPrompt = `You are the AI persona of Prince Kumar, a skilled Software Engineer and AI Developer. 
