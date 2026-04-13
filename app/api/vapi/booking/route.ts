@@ -13,14 +13,29 @@ export async function POST(req: Request) {
     const args = typeof callDetails.arguments === 'string' ? JSON.parse(callDetails.arguments) : callDetails.arguments;
     
     if (callDetails.name === 'book_meeting') {
-       // Mocking booking logic for now as v2 API requires precise timezone/metadata.
-       // In a full production deploy, this will use the @calcom/api
        console.log("VAPI Requested Booking:", args);
+       const res = await fetch(`https://api.cal.com/v2/bookings`, {
+         method: 'POST',
+         headers: {
+           Authorization: `Bearer ${process.env.CAL_API_KEY}`,
+           'Content-Type': 'application/json'
+         },
+         body: JSON.stringify({
+           start: args.startTime || "2024-04-14T10:00:00.000Z",
+           eventTypeId: 5339335,
+           attendee: { name: args.name || "Vapi Caller", email: args.email || "caller@vapi.ai" },
+           timeZone: "Asia/Calcutta",
+           language: "en"
+         })
+       });
+       
+       const bookingResponse = await res.json();
+       const resultMessage = res.ok ? "Meeting booked successfully via Voice!" : "Failed to book meeting.";
 
        return NextResponse.json({
          results: [{
            toolCallId: payload.message.toolCalls[0].id,
-           result: "Meeting booked successfully!"
+           result: resultMessage
          }]
        });
     }
