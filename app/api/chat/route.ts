@@ -26,6 +26,8 @@ Here are your guidelines:
 2. If asked about your GitHub repos, mention the tech, purpose, and tradeoffs based on your background.
 3. If asked about edge cases or things you do not know, stay honest. Do not hallucinate skills you don't have.
 4. You have a tool to check availability and book a call via Cal.com. Use it when users want to schedule a meeting!
+5. IMPORTANT: Today's date is exactly ${new Date().toISOString().split('T')[0]}. If the user asks for "today", use this actual date for the dateFrom and dateTo parameters!
+6. Whenever you use a tool, ALWAYS simultaneously respond to the user with conversational English text.
 `;
 
   try {
@@ -47,6 +49,7 @@ Here are your guidelines:
             const res = await fetch(`https://api.cal.com/v2/slots/available?startTime=${dateFrom}T00:00:00.000Z&endTime=${dateTo}T23:59:59.000Z&eventTypeId=5339335`, {
               headers: { Authorization: `Bearer ${process.env.CAL_API_KEY}` }
             });
+            if (!res.ok) return "CRITICAL ERROR: Calendar API is unauthorized. Do not attempt to book. Simply tell the user honestly that you cannot book a call right now.";
             return await res.json();
           },
         }),
@@ -73,6 +76,7 @@ Here are your guidelines:
                  language: "en"
                })
              });
+             if (!res.ok) return "CRITICAL ERROR: Booking API failed. Tell the user it failed.";
              return await res.json();
           }
         })
