@@ -7,91 +7,118 @@ import * as path from 'path';
 
 export const maxDuration = 30;
 
-export async function POST(req: Request) {
+export async function POST(req) {
   const { messages } = await req.json();
 
-  // Load resume/context dynamically
-  const resumePath = path.join(process.cwd(), './knowledge.md');
-  const resumeText = fs.existsSync(resumePath) ? fs.readFileSync(resumePath, 'utf8') : '';
+  const resumePath = path.join(process.cwd(), 'knowledge.md');
+  const resumeText = fs.existsSync(resumePath)
+    ? fs.readFileSync(resumePath, 'utf8')
+    : '';
 
-  const systemPrompt = `You are the AI persona of Prince Kumar, a skilled Software Engineer and AI Developer. 
-You are currently interviewing for a 44 LPA role at Scaler. 
-Your goal is to be helpful, professional, and confident about your skills. Provide specific, compelling answers based on your background.
+  const systemPrompt = `
+You are the AI persona of Prince Kumar.
 
-Here is your background context (Resume and Github READMEs):
-${resumeText}
+STRICT RULES:
+- Always use tools when needed
+- Never hallucinate
+- Answer only from context
 
-Here are your guidelines:
-1. Always stay in character as Prince Kumar's AI persona. 
-2. If asked about your GitHub repos, mention the tech, purpose, and tradeoffs based on your background.
-3. If asked about edge cases or things you do not know, stay honest. Do not hallucinate skills you don't have.
-4. You have a tool to check availability and book a call via Cal.com. Use it when users want to schedule a meeting!
-5. IMPORTANT: Today's date is exactly ${new Date().toISOString().split('T')[0]}. If the user asks for "today", use this actual date for the dateFrom and dateTo parameters!
-6. Whenever you use a tool, ALWAYS simultaneously respond to the user with conversational English text.
+BOOKING FLOW (STRICT):
+1. Call checkAvailability
+2. Show slots
+3. Ask user to pick one
+4. Ask name + email
+5. Call bookCall tool
+6. Return ONLY tool response
 `;
 
-  try {
-    const result = await generateText({
-      model: google('gemini-2.5-flash'),
-      system: systemPrompt,
-      messages: messages.slice(-3), // Only send the last 2 interactions to save quota
-      maxSteps: 2, // Hard limit internal tool loops 
-      maxRetries: 0,
-      tools: {
-        checkAvailability: tool({
-          description: 'Check the available slots for Prince Kumar on Cal.com.',
-          parameters: z.object({
-            dateFrom: z.string().describe('The start date in YYYY-MM-DD format'),
-            dateTo: z.string().describe('The end date in YYYY-MM-DD format'),
-          }),
-          // @ts-ignore
-          execute: async ({ dateFrom, dateTo }) => {
-            const res = await fetch(`https://api.cal.com/v2/slots/available?startTime=${dateFrom}T00:00:00.000Z&endTime=${dateTo}T23:59:59.000Z&eventTypeId=5339335`, {
-              headers: { Authorization: `Bearer ${process.env.CAL_API_KEY}` }
-            });
-            return await res.json();
-          },
-        }),
-        bookCall: tool({
-          description: 'Book a call with Prince Kumar via Cal.com',
-          parameters: z.object({
-            startTime: z.string().describe('The exact ISO string of the chosen start time from availability'),
-            name: z.string().describe('The name of the user booking the call'),
-            email: z.string().describe('The email of the user'),
-          }),
-          // @ts-ignore
-          execute: async ({ startTime, name, email }) => {
-            const res = await fetch(`https://api.cal.com/v2/bookings`, {
-              method: 'POST',
-              headers: {
-                Authorization: `Bearer ${process.env.CAL_API_KEY}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                start: startTime,
-                eventTypeId: 5339335,
-                attendee: { name, email },
-                timeZone: "Asia/Calcutta",
-                language: "en"
-              })
-            });
-            return await res.json();
+  // ---------------- TOOLS ----------------
+
+  const tools = {
+    checkAvailability: tool({
+      description: 'Check available slots',
+      parameters: z.object({
+        dateFrom: z.string().optional(),
+        dateTo: z.string().optional(),
+      }),
+      execute: async () => {
+        const res = await fetch(
+          `https://api.cal.com/v2/slots/available?eventTypeId=${process.env.DEFAULT_EVENT_TYPE_ID}`,
+          {
+            headers: {
+              Authorization: `Bearer ${process.env.CAL_API_KEY}`,
+            },
           }
-        })
+        );
+        const data = await res.json();
+        return data;
+      },
+    }),
+
+    bookCall: tool({
+      description: 'Book meeting',
+      parameters: z.object({
+        startTime: z.string(),
+        name: z.string(),
+        email: z.string(),
+      }),
+      execute: async ({ startTime, name, email }) => {
+        const res = await fetch(`https://api.cal.com/v2/bookings`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${process.env.CAL_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            start: startTime,
+            eventTypeId: Number(process.env.DEFAULT_EVENT_TYPE_ID),
+            attendee: {
+              name,
+              email,
+              timeZone: 'Asia/Kolkata',
+            },
+          }),
+        });
+
+        const data = await res.json();
+
+        return {
+          status: 'success',
+          booking: data,
+        };
+      },
+    }),
+  };
+
+  // ---------------- AI CALL ----------------
+
+  const result = await generateText({
+    model: google('gemini-3.1-flash-lite-preview'),
+    system: systemPrompt + "\nContext:\n" + resumeText,
+    messages: messages.slice(-3),
+    tools,
+  });
+
+  // ---------------- RESPONSE ----------------
+
+  let reply = result?.text || '';
+
+  // Handle booking output nicely
+  try {
+    const steps = result?.steps || [];
+    for (const step of steps) {
+      if (step.tool?.name === 'bookCall') {
+        const booking = step.output;
+
+        return new Response(
+          `Booking confirmed ✅\n\n${JSON.stringify(booking, null, 2)}`,
+          { headers: { 'Content-Type': 'text/plain' } }
+        );
       }
-    });
-
-    let reply = result.text;
-    if (!reply || reply.trim() === '') {
-      reply = "I attempted to check my calendar or book a call, but I need a couple more specific details from you first (like a specific date, time, or your email). Could you provide those details?";
     }
+  } catch (e) {}
 
-    return new Response(reply, {
-      status: 200,
-      headers: { 'Content-Type': 'text/plain; charset=utf-8' }
-    });
-  } catch (error: any) {
-    console.error("VERCEL API CRASH:", error);
-    return new Response(JSON.stringify({ error: error.message || error.toString(), stack: error.stack }), { status: 500, headers: { 'Content-Type': 'application/json' } });
-  }
+  return new Response(reply, {
+    headers: { 'Content-Type': 'text/plain' },
+  });
 }
